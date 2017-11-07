@@ -39,5 +39,43 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+        // sets aInstr to 1 if instruction is an A instruction, else 0
+        Not(in=instruction[15], out=aInstr);
+
+        // sets the D register according to the C instruction
+        And(a=instruction[4], b=instruction[15], out=loadD);
+        DRegister(in=ALUout, load=loadD, out=DReg);
+
+        // Sets the A register to the instruction if it is an A instruction
+        // else sets evaluated value of the C instruction if instruction[5]
+        // is true
+        And(a=instruction[15], b=instruction[5], out=setfromALU);
+        Mux16(a=instruction, b=ALUout, sel=instruction[15], out=regAVal);
+        Or(a=aInstr, b=setfromALU, out=loadA);
+        ARegister(in=regAVal, load=loadA, out=AReg, out[0..14]=addressM);
+
+        // Using the ALU to evaluate the C instruction 
+        Mux16(a=AReg, b=inM, sel=instruction[12], out=y);
+        ALU(
+            x=DReg, y=y,
+            zx=instruction[11], zy=instruction[9],
+            nx=instruction[10], ny=instruction[8],
+            f=instruction[7], no=instruction[6],
+            zr=ALUzr, ng=ALUng, out=ALUout, out=outM
+        );
+
+        // determines whether memory needs to be written to
+        And(a=instruction[15], b=instruction[3], out=writeM);
+
+        // determines whether to jump and jumps, if not set PC accordingly 
+        Not(in=ALUzr, out=notzr);
+        Not(in=ALUng, out=notng);
+        And(a=notzr, b=notng, out=pos);
+        And(a=instruction[2], b=ALUng, out=jlt);
+        And(a=instruction[1], b=ALUzr, out=jeq);
+        And(a=instruction[0], b=pos, out=jgt);
+        Or(a=jlt, b=jeq, out=jle);
+        Or(a=jle, b=jgt, out=jumpReq);
+        And(a=instruction[15], b=jumpReq, out=jump);
+        PC(in=AReg, load=jump, inc=true, reset=reset, out[0..14]=pc);
 }
